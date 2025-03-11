@@ -1,0 +1,46 @@
+name: Deploy Node.js SLS Application
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+
+      - name: Install esbuild
+        run: npm install esbuild
+        
+      - name: Build application
+        run: npm run es-build
+
+      - name: Send built files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{secrets.HOST}}
+          port: ${{secrets.PORT}}
+          username: root
+          key: ${{secrets.SSH_RSA_KEY}}
+          source: "./build/*"
+          target: "~/backend-etl/"
+
+      - name: Deploy Node.js app on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{secrets.HOST}}
+          port: ${{secrets.PORT}}
+          username: root
+          key: ${{secrets.SSH_RSA_KEY}}
+          script: |
+              ~/backend-etl/deploy.sh
