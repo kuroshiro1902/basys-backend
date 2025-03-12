@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import elasticRouter from './modules/elastic/elastic.routes';
+import { authRouter } from './modules/auth/auth.route';
 const router = Router();
 
 router.get('', (req, res) => {
@@ -9,7 +9,6 @@ router.get('', (req, res) => {
       </div>
     `);
 });
-router.use('/elastic', elasticRouter);
-// api đọc file từ khóa để lên product có thể biết được file từ khóa đã được đọc hay chưa
+router.use('/auth', authRouter);
 
 export default router;

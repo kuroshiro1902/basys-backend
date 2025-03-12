@@ -39,4 +39,7 @@ export const ENV = cleanEnv(process.env, {
   // Gemini config
   GEMINI_FLASH_API_TOKEN1: str(),
   GEMINI_FLASH_API_TOKEN2: str(),
+
+  ACCESS_TOKEN_SECRET: str(),
+  REFRESH_TOKEN_SECRET: str(),
 });

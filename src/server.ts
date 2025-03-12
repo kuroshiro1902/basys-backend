@@ -1,10 +1,9 @@
 import cors from 'cors';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
-import { pino } from 'pino';
 import bodyParser from 'body-parser';
 import router from './router';
-const logger = pino({ name: 'server start' });
+import { logger } from './modules/logger';
 const app: Express = express();
 
 // Set the application to trust the reverse proxy

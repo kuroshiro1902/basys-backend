@@ -1,0 +1,2 @@
+POST http://localhost:9201/api/auth/login
+content-type: application/json

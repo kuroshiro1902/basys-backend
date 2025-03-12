@@ -9,14 +9,14 @@ export const handleError = (error: ZodError | Error | string, res: Response) => 
   let errorMessage: string;
   let responseData: ResponseData;
   if (error instanceof ZodError) {
-    errorMessage = error.errors.map((err) => err.message).join(', ');
-    responseData = ResponseData.fail(StatusCodes.BAD_REQUEST, errorMessage);
+    errorMessage = error.errors.map(({ path, message }) => path.join(', ') + ': ' + message.toLowerCase()).join(', ');
+    responseData = ResponseData.fail(errorMessage, StatusCodes.BAD_REQUEST);
   } else {
     errorMessage = typeof error === 'string' ? error : error?.message;
   }
 
   logger.error(errorMessage);
-  responseData = ResponseData.fail(StatusCodes.INTERNAL_SERVER_ERROR, errorMessage);
+  responseData = ResponseData.fail(errorMessage, StatusCodes.INTERNAL_SERVER_ERROR);
 
   return handleResponse(responseData, res);
 };
