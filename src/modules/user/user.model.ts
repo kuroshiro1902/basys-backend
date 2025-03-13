@@ -14,7 +14,7 @@ export const UserInputSchema = z.object({
   name: UserSchema.shape.name.trim().min(5).max(255),
   email: UserSchema.shape.email.trim(),
   password: UserSchema.shape.password.trim().min(6).max(255),
-  features: UserSchema.shape.features.default([{ id: EFeature.user }]),
+  features: UserSchema.shape.features.default([]),
 });
 
 export type TUser = z.infer<typeof UserSchema>;

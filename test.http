@@ -1,2 +1,4 @@
 POST http://localhost:9201/api/auth/login
 content-type: application/json
+
+{"email": "emsinos1902@gmail.com", "password": "123456", "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NiwiZmVhdHVyZXMiOltdLCJpYXQiOjE3NDE4NzYyMTAsImV4cCI6MzQ4Mzc"}

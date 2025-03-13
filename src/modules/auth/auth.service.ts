@@ -10,13 +10,14 @@ import { RefreshTokenSchema, TRefreshToken, TUserJWTPayload } from './auth.model
 import { ACCESS_TOKEN_EXPIRED_TIMESTAMP, REFRESH_TOKEN_EXPIRED_TIMESTAMP } from './auth.const';
 import { logger } from '../logger';
 import { FeaturePermissionSchema } from '../feature-permission/feature-permission.model';
+import { EFeature } from '../feature-permission/feature-permission.const';
 
 export class AuthService {
   private userRepository: UserRepository;
 
   private _logInBodySchema = UserInputSchema.pick({ email: true, password: true }).extend({ refresh_token: RefreshTokenSchema.optional() });
 
-  private _signUpBodySchema = UserInputSchema.pick({ email: true, password: true, name: true, features: true });
+  private _signUpBodySchema = UserInputSchema.pick({ email: true, password: true, name: true });
 
   constructor(userRepository: UserRepository = new UserRepository()) {
     this.userRepository = userRepository;
@@ -84,9 +85,9 @@ export class AuthService {
   }
 
   async logIn(user$: z.input<typeof this._logInBodySchema>): Promise<ResponseData<{ accessToken: string; refreshToken: string } | null>> {
-    const { email: username, password, refresh_token } = this._logInBodySchema.parse(user$);
+    const { email, password, refresh_token } = this._logInBodySchema.parse(user$);
 
-    const user = await this.userRepository.findByEmail(username);
+    const user = await this.userRepository.findByEmail(email);
     if (!user) {
       return ResponseData.fail('User not found!', StatusCodes.NOT_FOUND);
     }
@@ -106,6 +107,7 @@ export class AuthService {
 
     if (refresh_token) {
       const foundToken = user.refresh_tokens.find((token) => token.token === refresh_token);
+      // If token does not exist -> Token has been deleted before -> Reuse token attack!
       if (!foundToken) {
         logger.warn('Detected refresh token reuse! User is maybe being attacked!');
         await this.userRepository.resetRefreshTokens(user.id, [newRefreshToken]);
@@ -148,13 +150,10 @@ export class AuthService {
     if (userExists) {
       return ResponseData.fail('User already exists!', StatusCodes.CONFLICT);
     }
-    try {
-      const hashedPassword = await bcrypt.hash(user.password, 10);
-      user.password = hashedPassword;
-      const { password, ...createdUser } = await this.userRepository.createOne(user);
-      return ResponseData.success(createdUser, 'Create user successfully!', StatusCodes.CREATED);
-    } catch (error) {
-      return ResponseData.fail('An error occurred while signing up!', StatusCodes.INTERNAL_SERVER_ERROR);
-    }
+
+    const hashedPassword = await bcrypt.hash(user.password, 10);
+    user.password = hashedPassword;
+    const { password, ...createdUser } = await this.userRepository.createOne(user);
+    return ResponseData.success(createdUser, 'Create user successfully!', StatusCodes.CREATED);
   }
 }
