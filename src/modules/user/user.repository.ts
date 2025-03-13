@@ -85,7 +85,7 @@ export class UserRepository {
   async setFeatures(userId: number, features: Feature[], tx?: Prisma.TransactionClient) {
     if (!features || features.length === 0) return;
 
-    const _handle = async (tx: Prisma.TransactionClient) => {
+    const transaction = async (tx: Prisma.TransactionClient) => {
       // Lấy danh sách features hiện tại của user
       const existingFeatures = await tx.userFeature.findMany({
         where: { user_id: userId },
@@ -119,8 +119,11 @@ export class UserRepository {
       }
     };
 
-    const transactionHandler = tx ?? DB;
-    return _handle(transactionHandler);
+    if (tx) {
+      return await transaction(tx);
+    } else {
+      return DB.$transaction(transaction);
+    }
   }
 
   /**
@@ -158,51 +161,58 @@ export class UserRepository {
     if (!refresh_tokens$ || refresh_tokens$.length === 0) return;
 
     const refresh_tokens = refresh_tokens$.map((rf) => ({ ...rf, created_at: new Date() }));
-    const handler = tx ?? DB; // Dùng transaction có sẵn hoặc DB bình thường
 
-    // Lấy danh sách refresh_tokens hiện tại, sắp xếp theo created_at
-    const existingTokens = await handler.refreshToken.findMany({
-      where: { user_id: userId },
-      orderBy: { created_at: 'desc' }, // Mới nhất -> cũ nhất
-      select: { token: true, created_at: true, expiresAt: true },
-    });
-
-    // Hợp nhất với refresh_tokens mới, loại bỏ trùng lặp
-    const tokenMap = new Map<string, Omit<RefreshToken, 'user_id'>>();
-
-    [...refresh_tokens, ...existingTokens].forEach((token) => {
-      tokenMap.set(token.token, token);
-    });
-
-    // Giữ lại 3 token mới nhất
-    const latestTokens = Array.from(tokenMap.values())
-      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime()) // Sắp xếp theo thời gian tạo
-      .slice(0, 3);
-
-    // Lấy danh sách token còn lại sau khi lọc
-    const latestTokenSet = new Set(latestTokens.map((t) => t.token));
-
-    // Xóa token cũ không nằm trong danh sách mới
-    await handler.refreshToken.deleteMany({
-      where: {
-        user_id: userId,
-        token: { notIn: Array.from(latestTokenSet) },
-      },
-    });
-
-    // Lấy danh sách token cần tạo mới (chưa có trong database)
-    const existingTokenSet = new Set(existingTokens.map((t) => t.token));
-    const tokensToCreate = latestTokens.filter((t) => !existingTokenSet.has(t.token));
-
-    // Thêm token mới vào database
-    if (tokensToCreate.length > 0) {
-      await handler.refreshToken.createMany({
-        data: tokensToCreate.map((t) => ({
-          token: t.token,
-          user_id: userId,
-          expiresAt: t.expiresAt,
-        })),
+    const transaction = async (tx: Prisma.TransactionClient) => {
+      // Lấy danh sách refresh_tokens hiện tại, sắp xếp theo created_at
+      const existingTokens = await tx.refreshToken.findMany({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' }, // Mới nhất -> cũ nhất
+        select: { token: true, created_at: true, expiresAt: true },
       });
+
+      // Hợp nhất với refresh_tokens mới, loại bỏ trùng lặp
+      const tokenMap = new Map<string, Omit<RefreshToken, 'user_id'>>();
+
+      [...refresh_tokens, ...existingTokens].forEach((token) => {
+        tokenMap.set(token.token, token);
+      });
+
+      // Giữ lại 3 token mới nhất
+      const latestTokens = Array.from(tokenMap.values())
+        .sort((a, b) => b.created_at.getTime() - a.created_at.getTime()) // Sắp xếp theo thời gian tạo
+        .slice(0, 3);
+
+      // Lấy danh sách token còn lại sau khi lọc
+      const latestTokenSet = new Set(latestTokens.map((t) => t.token));
+
+      // Xóa token cũ không nằm trong danh sách mới
+      await tx.refreshToken.deleteMany({
+        where: {
+          user_id: userId,
+          token: { notIn: Array.from(latestTokenSet) },
+        },
+      });
+
+      // Lấy danh sách token cần tạo mới (chưa có trong database)
+      const existingTokenSet = new Set(existingTokens.map((t) => t.token));
+      const tokensToCreate = latestTokens.filter((t) => !existingTokenSet.has(t.token));
+
+      // Thêm token mới vào database
+      if (tokensToCreate.length > 0) {
+        await tx.refreshToken.createMany({
+          data: tokensToCreate.map((t) => ({
+            token: t.token,
+            user_id: userId,
+            expiresAt: t.expiresAt,
+          })),
+        });
+      }
+    };
+
+    if (tx) {
+      return await transaction(tx);
+    } else {
+      return DB.$transaction(transaction);
     }
   }
 }
