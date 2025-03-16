@@ -21,7 +21,30 @@ export class AuthController {
     });
   };
 
-  async refreshToken(req: Request, res: Response) {
+  async refreshAccessToken(req: Request, res: Response) {
+    try {
+      const refreshToken = this._getRefreshTokenFromCookie(req);
+
+      if (!refreshToken) {
+        return handleResponse(ResponseData.fail('Refresh token is required!', StatusCodes.UNAUTHORIZED), res);
+      }
+
+      // Xác thực Refresh Token & tạo Access Token mới
+      const responseData = await this.authService.refreshAccessToken(refreshToken);
+
+      if (responseData.success) {
+        return handleResponse(responseData, res);
+      }
+
+      // Nếu Refresh Token không hợp lệ -> Xóa cookie & trả lỗi
+      this._clearRefreshTokenFromCookie(res);
+      return handleResponse(ResponseData.fail('Invalid or expired refresh token', StatusCodes.FORBIDDEN), res);
+    } catch (error: any) {
+      handleError(error, res);
+    }
+  }
+
+  async refreshRefreshToken(req: Request, res: Response) {
     try {
       const refreshToken = this._getRefreshTokenFromCookie(req);
       console.log('req.cookies', req.cookies);
@@ -31,7 +54,7 @@ export class AuthController {
       }
 
       this._clearRefreshTokenFromCookie(res);
-      const responseData = await this.authService.handleRefreshToken(refreshToken);
+      const responseData = await this.authService.refreshRefreshToken(refreshToken);
       if (responseData.success) {
         this._setRefreshTokenToCookie(res, refreshToken);
       }

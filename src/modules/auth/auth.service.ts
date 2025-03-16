@@ -6,11 +6,12 @@ import { ENV } from '@/environments/environment';
 import { UserRepository } from '../user/user.repository';
 import bcrypt from 'bcrypt';
 import { TUser, UserInputSchema, UserSchema } from '../user/user.model';
-import { RefreshTokenSchema, TRefreshToken, TUserJWTPayload } from './auth.model';
+import { RefreshTokenSchema, TRefreshTokenInput, TUserJWTPayload } from './auth.model';
 import { ACCESS_TOKEN_EXPIRED_TIMESTAMP, REFRESH_TOKEN_EXPIRED_TIMESTAMP } from './auth.const';
 import { logger } from '../logger';
 import { FeaturePermissionSchema } from '../feature-permission/feature-permission.model';
 import { EFeature } from '../feature-permission/feature-permission.const';
+import { CONFIG } from '@/config/config';
 
 export class AuthService {
   private userRepository: UserRepository;
@@ -34,31 +35,32 @@ export class AuthService {
     );
   }
 
-  private createRefreshToken(payload: TUserJWTPayload): string {
+  private createRefreshToken(payload: TUserJWTPayload, expiresIn?: number): string {
     return jwt.sign(
       { [UserSchema.keyof().enum.id]: payload.id, [UserSchema.keyof().enum.features]: payload.features ?? [] },
       ENV.REFRESH_TOKEN_SECRET,
       {
         algorithm: 'HS256',
-        expiresIn: REFRESH_TOKEN_EXPIRED_TIMESTAMP(),
+        expiresIn: expiresIn ?? REFRESH_TOKEN_EXPIRED_TIMESTAMP(),
       },
     );
   }
 
-  async handleRefreshToken(refreshToken$: string): Promise<ResponseData> {
+  async refreshAccessToken(refreshToken$: string): Promise<ResponseData<{ access_token: string } | null>> {
     const refreshToken = RefreshTokenSchema.optional().parse(refreshToken$);
     if (!refreshToken) {
       return ResponseData.fail('Invalid refresh token!', StatusCodes.UNAUTHORIZED);
     }
 
-    // Tìm user theo refreshToken
-    const user = await this.userRepository.findByRefreshToken(refreshToken);
+    const user = await this.userRepository.findOne({
+      where: { refresh_tokens: { some: { token: refreshToken } } },
+      select: { id: true, features: { select: { feature_id: true } } },
+    });
     if (!user) {
       return ResponseData.fail('Cannot find User!', StatusCodes.FORBIDDEN);
     }
 
-    // Xóa refresh token cũ khỏi danh sách
-    const newRefreshTokenArr = user.refresh_tokens.filter((token) => token.token !== refreshToken);
+    const userJWTPayload: TUserJWTPayload = { id: user.id, features: user.features.map(({ feature_id: id }) => ({ id })) };
 
     try {
       const decoded = jwt.verify(refreshToken, ENV.REFRESH_TOKEN_SECRET) as TUserJWTPayload;
@@ -67,27 +69,64 @@ export class AuthService {
         return ResponseData.fail('Token is not valid!!!', StatusCodes.FORBIDDEN);
       }
 
+      const newAccessToken = this.createAccessToken(userJWTPayload);
+
+      return ResponseData.success({ access_token: newAccessToken });
+    } catch (error) {
+      return ResponseData.fail('Expired or invalid refresh token!', StatusCodes.FORBIDDEN);
+    }
+  }
+
+  async refreshRefreshToken(refreshToken$: string): Promise<ResponseData<{ access_token: string; refresh_token: string } | null>> {
+    const refreshToken = RefreshTokenSchema.optional().parse(refreshToken$);
+    if (!refreshToken) {
+      return ResponseData.fail('Invalid refresh token!', StatusCodes.UNAUTHORIZED);
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { refresh_tokens: { some: { token: refreshToken } } },
+      select: { id: true, refresh_tokens: { select: { token: true, created_at: true } }, features: { select: { feature_id: true } } },
+    });
+    if (!user) {
+      return ResponseData.fail('Invalid refresh token!', StatusCodes.FORBIDDEN);
+    }
+
+    try {
+      const decoded = jwt.verify(refreshToken, ENV.REFRESH_TOKEN_SECRET) as TUserJWTPayload;
+
+      if (user.id !== decoded.id) {
+        await this.userRepository.update({ where: { id: user.id }, data: { refresh_tokens: { delete: { token: refreshToken } } } });
+        return ResponseData.fail('Invalid refresh token!', StatusCodes.FORBIDDEN);
+      }
+
+      const userJWTPayload: TUserJWTPayload = { id: user.id, features: user.features.map(({ feature_id: id }) => ({ id })) };
       // Tạo Access Token và Refresh Token mới
-      const newAccessToken = this.createAccessToken(user);
+      const newAccessToken = this.createAccessToken(userJWTPayload);
 
       const expiresAt = REFRESH_TOKEN_EXPIRED_TIMESTAMP();
-      const newRefreshToken: TRefreshToken = { token: this.createRefreshToken(user), expiresAt, user_id: user.id };
+      const newRefreshToken: TRefreshTokenInput = { token: this.createRefreshToken(userJWTPayload, expiresAt), expiresAt };
 
       // Cập nhật danh sách refresh token trong database
-      await this.userRepository.setRefreshTokens(user.id, [...newRefreshTokenArr, newRefreshToken]);
+      await this.userRepository.update({
+        where: { id: user.id },
+        data: { refresh_tokens: { delete: { token: refreshToken }, create: newRefreshToken } },
+      });
 
-      return ResponseData.success({ accessToken: newAccessToken, refreshToken: newRefreshToken });
-    } catch (error) {
-      // Nếu refresh token hết hạn, xóa nó khỏi DB
-      await this.userRepository.setRefreshTokens(user.id, newRefreshTokenArr);
-      return ResponseData.fail('Expired Refresh token!', StatusCodes.FORBIDDEN);
+      return ResponseData.success({ access_token: newAccessToken, refresh_token: newRefreshToken.token });
+    } catch (error: any) {
+      // Nếu refresh token hết hạn hoặc không hợp lệ, xóa nó khỏi DB.
+      await this.userRepository.update({ where: { id: user.id }, data: { refresh_tokens: { delete: { token: refreshToken } } } });
+      return ResponseData.fail('Verify refresh token fail! ' + error.message || '', StatusCodes.FORBIDDEN);
     }
   }
 
   async logIn(user$: z.input<typeof this._logInBodySchema>): Promise<ResponseData<{ accessToken: string; refreshToken: string } | null>> {
     const { email, password, refresh_token } = this._logInBodySchema.parse(user$);
 
-    const user = await this.userRepository.findByEmail(email);
+    const user = await this.userRepository.findOne({
+      where: { email },
+      include: { features: { select: { feature_id: true } }, refresh_tokens: { select: { token: true } } },
+    });
     if (!user) {
       return ResponseData.fail('User not found!', StatusCodes.NOT_FOUND);
     }
@@ -97,32 +136,30 @@ export class AuthService {
       return ResponseData.fail('Invalid credentials!', StatusCodes.UNAUTHORIZED);
     }
 
-    const features = user.features.map(({ feature }) => feature);
-    const accessToken = this.createAccessToken({ id: user.id, features });
-    const newRefreshToken: TRefreshToken = {
-      token: this.createRefreshToken({ id: user.id, features }),
-      user_id: user.id,
-      expiresAt: REFRESH_TOKEN_EXPIRED_TIMESTAMP(),
-    };
-
     if (refresh_token) {
+      // handle refresh token
       const foundToken = user.refresh_tokens.find((token) => token.token === refresh_token);
       // If token does not exist -> Token has been deleted before -> Reuse token attack!
       if (!foundToken) {
-        logger.warn('Detected refresh token reuse! User is maybe being attacked!');
-        await this.userRepository.resetRefreshTokens(user.id, [newRefreshToken]);
-      } else {
-        const notDuplicatedRefreshTokenArr = Object.values(
-          [...user.refresh_tokens, newRefreshToken].reduce((acc, token) => {
-            return { ...acc, [token.token]: token };
-          }, {} as Record<string, TRefreshToken>),
-        );
-        await this.userRepository.setRefreshTokens(user.id, notDuplicatedRefreshTokenArr);
+        logger.warn('Detected refresh token reuse! User is maybe being attacked!'); // có thể bổ sung cơ chế thông báo hoặc 2fa cho người dùng thật
       }
     }
 
-    const { name } = user;
-    return ResponseData.success({ user: { name }, accessToken, refreshToken: newRefreshToken.token });
+    if (user.refresh_tokens.length >= CONFIG.refresh_token.max_amount_per_user) {
+      return ResponseData.fail('You have reached the maximum device. Please log out from another device!', StatusCodes.TOO_MANY_REQUESTS);
+    }
+
+    const features = user.features.map(({ feature_id: id }) => ({ id }));
+    const accessToken = this.createAccessToken({ id: user.id, features });
+    const newRefreshToken: TRefreshTokenInput = {
+      token: this.createRefreshToken({ id: user.id, features }),
+      expiresAt: REFRESH_TOKEN_EXPIRED_TIMESTAMP(),
+    };
+
+    await this.userRepository.update({ where: { id: user.id }, data: { refresh_tokens: { create: newRefreshToken } } });
+
+    const { features: _, refresh_tokens, password: __, ...userDTO } = user;
+    return ResponseData.success({ user: userDTO, accessToken, refreshToken: newRefreshToken.token });
   }
 
   async logOut(refreshToken$: string) {
@@ -133,12 +170,9 @@ export class AuthService {
       return responseData;
     }
 
-    const user = await this.userRepository.findByRefreshToken(refreshToken);
+    const user = await this.userRepository.findOne({ where: { refresh_tokens: { some: { token: refreshToken } } } });
     if (user) {
-      await this.userRepository.setRefreshTokens(
-        user.id,
-        user.refresh_tokens.filter(({ token }) => token !== refreshToken),
-      );
+      await this.userRepository.update({ where: { id: user.id }, data: { refresh_tokens: { delete: { token: refreshToken } } } });
     }
 
     return responseData;
@@ -146,14 +180,14 @@ export class AuthService {
 
   async signUp(user$: z.input<typeof this._signUpBodySchema>) {
     const user = this._signUpBodySchema.parse(user$);
-    const userExists = await this.userRepository.findByEmail(user.email);
+    const userExists = await this.userRepository.findOne({ where: { email: user.email } });
     if (userExists) {
       return ResponseData.fail('User already exists!', StatusCodes.CONFLICT);
     }
 
     const hashedPassword = await bcrypt.hash(user.password, 10);
     user.password = hashedPassword;
-    const { password, ...createdUser } = await this.userRepository.createOne(user);
+    const createdUser = await this.userRepository.create({ data: user, omit: { password: true } });
     return ResponseData.success(createdUser, 'Create user successfully!', StatusCodes.CREATED);
   }
 }

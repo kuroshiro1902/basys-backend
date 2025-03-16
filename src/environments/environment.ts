@@ -10,6 +10,8 @@ export const ENV = cleanEnv(process.env, {
   COMMON_RATE_LIMIT_MAX_REQUESTS: num({ devDefault: 100 }),
   COMMON_RATE_LIMIT_WINDOW_MS: num({ devDefault: 1000 }),
 
+  CLIENT_URL: str(),
+
   // Elastic config
   ELASTIC_HOST: str(),
   ELASTIC_PORT: port(),

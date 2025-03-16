@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import bodyParser from 'body-parser';
 import router from './router';
 import { logger } from './modules/logger';
+import { ENV } from './environments/environment';
 const app: Express = express();
 
 // Set the application to trust the reverse proxy
@@ -13,7 +14,7 @@ const app: Express = express();
 app.use(bodyParser.json({ limit: '5mb' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// app.use(cors({ origin: ENV.CORS_ORIGIN, credentials: true }));
+// app.use(cors({ origin: ENV.CLIENT_URL, credentials: true }));
 app.use(helmet());
 app.use('/api', router);
 // Request logging
