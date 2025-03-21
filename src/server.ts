@@ -14,7 +14,7 @@ const app: Express = express();
 app.use(bodyParser.json({ limit: '5mb' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// app.use(cors({ origin: ENV.CLIENT_URL, credentials: true }));
+app.use(cors({ origin: ENV.CLIENT_URL, credentials: true }));
 app.use(helmet());
 app.use('/api', router);
 // Request logging

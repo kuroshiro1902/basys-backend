@@ -54,7 +54,7 @@ export class UserRepository {
   // }
 
   create = DB.user.create;
-  $transaction = DB.$transaction;
+  $transaction = DB.$transaction.bind(DB);
 
   // async updateOne(
   //   userId: number,
