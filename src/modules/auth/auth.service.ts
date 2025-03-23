@@ -14,6 +14,8 @@ import { EFeature } from '../feature-permission/feature-permission.const';
 import { CONFIG } from '@/config/config';
 
 export class AuthService {
+  private renewAccessTokenDirection = 'VALID_ACCESS_TOKEN_REQUIRED';
+
   private userRepository: UserRepository;
 
   private _logInBodySchema = UserInputSchema.pick({ email: true, password: true }).extend({ refresh_token: RefreshTokenSchema.optional() });
@@ -33,6 +35,22 @@ export class AuthService {
         expiresIn: `${CONFIG.access_token.expired_minutes}m`,
       },
     );
+  }
+
+  verifyAccessToken(token?: string) {
+    if (!token) {
+      return ResponseData.fail('Unauthorized', StatusCodes.UNAUTHORIZED, this.renewAccessTokenDirection);
+    }
+    try {
+      const decoded = jwt.verify(token, ENV.ACCESS_TOKEN_SECRET) as TUserJWTPayload;
+      return ResponseData.success(decoded);
+    } catch (error: any) {
+      return ResponseData.fail(
+        error?.message ?? 'Expired or invalid access token!',
+        StatusCodes.UNAUTHORIZED,
+        this.renewAccessTokenDirection,
+      );
+    }
   }
 
   private createRefreshToken(payload: TUserJWTPayload): string {
@@ -238,3 +256,5 @@ export class AuthService {
     return ResponseData.success(createdUser, 'Create user successfully!', StatusCodes.CREATED);
   }
 }
+
+export const authService = new AuthService();

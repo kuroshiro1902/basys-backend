@@ -1,16 +1,18 @@
 import { CookieOptions, Request, Response } from 'express';
-import { AuthService } from './auth.service';
+import { authService, AuthService } from './auth.service';
 import { handleError } from '@/utils/handle-error.util';
 import { handleResponse } from '@/utils/handle-response.util';
 import { logger } from '../logger';
 import { CONFIG } from '@/config/config';
 import { ResponseData } from '../shared/models/response-data.model';
 import { StatusCodes } from 'http-status-codes';
+import { userService, UserService } from '../user/user.service';
+import { TAuthRequest } from './auth.model';
 
 export class AuthController {
   private _cookieOptions: CookieOptions = { httpOnly: true, secure: true, sameSite: 'none' };
   private _cookieMaxAge = CONFIG.refresh_token.expired_days * 24 * 60 * 60 * 1000;
-  constructor(private authService: AuthService = new AuthService()) {}
+  constructor(private authService: AuthService, private userService: UserService) {}
 
   private _getRefreshTokenFromCookie = (req: Request) => req.cookies?.[CONFIG.refresh_token.cookie_key] as string | undefined;
   private _clearRefreshTokenFromCookie = (res: Response) => res.clearCookie(CONFIG.refresh_token.cookie_key, this._cookieOptions);
@@ -111,6 +113,25 @@ export class AuthController {
       handleError(error, res);
     }
   }
+
+  async verifyUser(req: TAuthRequest, res: Response) {
+    try {
+      const { id } = req.user ?? {};
+
+      if (!id) {
+        return handleResponse(ResponseData.fail('User id is not found!', StatusCodes.NOT_FOUND), res);
+      }
+
+      const response = await this.userService.getUserById(id);
+      if (response.data && response.success) {
+        return handleResponse(response, res);
+      }
+
+      return handleResponse(ResponseData.fail('User is not found!', StatusCodes.NOT_FOUND), res);
+    } catch (error: any) {
+      handleError(error, res);
+    }
+  }
 }
 
-export const authController = new AuthController();
+export const authController = new AuthController(authService, userService);

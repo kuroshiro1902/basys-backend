@@ -1,10 +1,10 @@
 export const CONFIG = {
   refresh_token: {
     cookie_key: 'refresh_token',
-    expired_days: 3,
+    expired_days: 1,
     max_amount_per_user: Number.MAX_SAFE_INTEGER,
   },
   access_token: {
-    expired_minutes: 5,
+    expired_minutes: 3,
   },
 };

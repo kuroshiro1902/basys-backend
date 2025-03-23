@@ -28,9 +28,10 @@ build({
   outfile: 'build/index.js',
   minify: true,
   sourcemap: false,
+  external: ['bcrypt'], // Đánh dấu bcrypt là external
 })
   .then(() => {
-    copyFolderSync('src/data', 'build/src/data'); // Copy thư mục
+    // copyFolderSync('src/data', 'build/src/data'); // Copy thư mục
     // fs.copyFileSync('.env', 'build/.env'); // copy env
     console.log('✅ Build thành công và đã copy thư mục data!');
   })
