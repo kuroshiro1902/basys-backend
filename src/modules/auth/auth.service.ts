@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { ENV } from '@/environments/environment';
 import { UserRepository } from '../user/user.repository';
 import bcrypt from 'bcrypt';
-import { TUser, UserInputSchema, UserSchema } from '../user/user.model';
+import { TUser, UserDefaultDTO, UserDefaultSelect, UserInputSchema, UserSchema } from '../user/user.model';
 import { RefreshTokenSchema, TRefreshTokenInput, TUserJWTPayload } from './auth.model';
 import { ACCESS_TOKEN_EXPIRED_TIMESTAMP, REFRESH_TOKEN_EXPIRED_TIMESTAMP } from './auth.const';
 import { logger } from '../logger';
@@ -37,6 +37,17 @@ export class AuthService {
     );
   }
 
+  private createRefreshToken(payload: TUserJWTPayload): string {
+    return jwt.sign(
+      { [UserSchema.keyof().enum.id]: payload.id, [UserSchema.keyof().enum.features]: payload.features ?? [] },
+      ENV.REFRESH_TOKEN_SECRET,
+      {
+        algorithm: 'HS256',
+        expiresIn: `${CONFIG.refresh_token.expired_days}d`,
+      },
+    );
+  }
+
   verifyAccessToken(token?: string) {
     if (!token) {
       return ResponseData.fail('Unauthorized', StatusCodes.UNAUTHORIZED, this.renewAccessTokenDirection);
@@ -53,17 +64,6 @@ export class AuthService {
     }
   }
 
-  private createRefreshToken(payload: TUserJWTPayload): string {
-    return jwt.sign(
-      { [UserSchema.keyof().enum.id]: payload.id, [UserSchema.keyof().enum.features]: payload.features ?? [] },
-      ENV.REFRESH_TOKEN_SECRET,
-      {
-        algorithm: 'HS256',
-        expiresIn: `${CONFIG.refresh_token.expired_days}d`,
-      },
-    );
-  }
-
   async refreshAccessToken(
     refreshToken$: string,
   ): Promise<ResponseData<{ access_token: string; user: Pick<TUser, 'id' | 'name' | 'email'> } | null>> {
@@ -74,7 +74,7 @@ export class AuthService {
 
     const user = await this.userRepository.findOne({
       where: { refresh_tokens: { some: { token: refreshToken } } },
-      select: { id: true, name: true, email: true, features: { select: { feature_id: true } } },
+      select: { ...UserDefaultSelect, features: { select: { feature_id: true } } },
     });
     if (!user) {
       return ResponseData.fail('Token is not valid!', StatusCodes.FORBIDDEN);
@@ -91,75 +91,74 @@ export class AuthService {
 
       const newAccessToken = this.createAccessToken(userJWTPayload);
 
-      const { features, ...userDTO } = user;
-      return ResponseData.success({ access_token: newAccessToken, user: userDTO });
+      return ResponseData.success({ access_token: newAccessToken, user: UserDefaultDTO(user) });
     } catch (error) {
       return ResponseData.fail('Expired or invalid refresh token!', StatusCodes.FORBIDDEN);
     }
   }
 
-  async refreshRefreshToken(
-    refreshToken$: string,
-  ): Promise<ResponseData<{ user: Pick<TUser, 'id' | 'name' | 'email'>; access_token: string; refresh_token: string } | null>> {
-    const refreshToken = RefreshTokenSchema.optional().parse(refreshToken$);
-    if (!refreshToken) {
-      return ResponseData.fail('Invalid refresh token!', StatusCodes.UNAUTHORIZED);
-    }
+  // async refreshRefreshToken(
+  //   refreshToken$: string,
+  // ): Promise<ResponseData<{ user: Pick<TUser, 'id' | 'name' | 'email'>; access_token: string; refresh_token: string } | null>> {
+  //   const refreshToken = RefreshTokenSchema.optional().parse(refreshToken$);
+  //   if (!refreshToken) {
+  //     return ResponseData.fail('Invalid refresh token!', StatusCodes.UNAUTHORIZED);
+  //   }
 
-    const user = await this.userRepository.findOne({
-      where: { refresh_tokens: { some: { token: refreshToken } } },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        // refresh_tokens: { select: { token: true, created_at: true } },
-        features: { select: { feature_id: true } },
-      },
-    });
-    if (!user) {
-      return ResponseData.fail('Invalid refresh token!', StatusCodes.FORBIDDEN);
-    }
+  //   const user = await this.userRepository.findOne({
+  //     where: { refresh_tokens: { some: { token: refreshToken } } },
+  //     select: {
+  //       id: true,
+  //       name: true,
+  //       email: true,
+  //       // refresh_tokens: { select: { token: true, created_at: true } },
+  //       features: { select: { feature_id: true } },
+  //     },
+  //   });
+  //   if (!user) {
+  //     return ResponseData.fail('Invalid refresh token!', StatusCodes.FORBIDDEN);
+  //   }
 
-    try {
-      const decoded = jwt.verify(refreshToken, ENV.REFRESH_TOKEN_SECRET) as TUserJWTPayload;
+  //   try {
+  //     const decoded = jwt.verify(refreshToken, ENV.REFRESH_TOKEN_SECRET) as TUserJWTPayload;
 
-      if (user.id !== decoded.id) {
-        await this.userRepository.update({ where: { id: user.id }, data: { refresh_tokens: { delete: { token: refreshToken } } } });
-        return ResponseData.fail('Invalid refresh token!', StatusCodes.FORBIDDEN);
-      }
+  //     if (user.id !== decoded.id) {
+  //       await this.userRepository.update({ where: { id: user.id }, data: { refresh_tokens: { delete: { token: refreshToken } } } });
+  //       return ResponseData.fail('Invalid refresh token!', StatusCodes.FORBIDDEN);
+  //     }
 
-      const userJWTPayload: TUserJWTPayload = { id: user.id, features: user.features.map(({ feature_id: id }) => ({ id })) };
-      // Tạo Access Token và Refresh Token mới
-      const newAccessToken = this.createAccessToken(userJWTPayload);
+  //     const userJWTPayload: TUserJWTPayload = { id: user.id, features: user.features.map(({ feature_id: id }) => ({ id })) };
+  //     // Tạo Access Token và Refresh Token mới
+  //     const newAccessToken = this.createAccessToken(userJWTPayload);
 
-      const expiresAt = REFRESH_TOKEN_EXPIRED_TIMESTAMP();
-      const newRefreshToken: TRefreshTokenInput = { token: this.createRefreshToken(userJWTPayload) };
+  //     const expiresAt = REFRESH_TOKEN_EXPIRED_TIMESTAMP();
+  //     const newRefreshToken: TRefreshTokenInput = { token: this.createRefreshToken(userJWTPayload) };
 
-      // Cập nhật danh sách refresh token trong database
-      await this.userRepository.$transaction(async (tx) => {
-        await tx.user.update({
-          where: { id: user.id },
-          data: { refresh_tokens: { deleteMany: { token: refreshToken } } },
-        });
-        await tx.user.update({
-          where: { id: user.id },
-          data: { refresh_tokens: { create: newRefreshToken } },
-        });
-      });
+  //     // Cập nhật danh sách refresh token trong database
+  //     await this.userRepository.$transaction(async (tx) => {
+  //       await tx.user.update({
+  //         where: { id: user.id },
+  //         data: { refresh_tokens: { deleteMany: { token: refreshToken } } },
+  //       });
+  //       await tx.user.update({
+  //         where: { id: user.id },
+  //         data: { refresh_tokens: { create: newRefreshToken } },
+  //       });
+  //     });
 
-      const { features, ...userDTO } = user;
-      return ResponseData.success({
-        user: userDTO,
-        access_token: newAccessToken,
-        refresh_token: newRefreshToken.token,
-        expired_at: expiresAt,
-      });
-    } catch (error: any) {
-      // Nếu refresh token hết hạn hoặc không hợp lệ, xóa nó khỏi DB.
-      await this.userRepository.update({ where: { id: user.id }, data: { refresh_tokens: { delete: { token: refreshToken } } } });
-      return ResponseData.fail('Verify refresh token fail! ' + error.message || '', StatusCodes.FORBIDDEN);
-    }
-  }
+  //     const { features, ...userDTO } = user;
+  //     return ResponseData.success({
+  //       user: userDTO,
+  //       access_token: newAccessToken,
+  //       refresh_token: newRefreshToken.token,
+  //       expired_at: expiresAt,
+  //     });
+  //   } catch (error: any) {
+  //     // Nếu refresh token hết hạn hoặc không hợp lệ, xóa nó khỏi DB.
+  //     await this.userRepository.update({ where: { id: user.id }, data: { refresh_tokens: { delete: { token: refreshToken } } } });
+  //     return ResponseData.fail('Verify refresh token fail! ' + error.message || '', StatusCodes.FORBIDDEN);
+  //   }
+  // }
 
   async logIn(user$: z.input<typeof this._logInBodySchema>): Promise<ResponseData<{ access_token: string; refresh_token: string } | null>> {
     const { email, password, refresh_token } = this._logInBodySchema.parse(user$);
@@ -223,12 +222,11 @@ export class AuthService {
       });
     });
 
-    const { features: _, refresh_tokens, password: __, ...userDTO } = user;
-    return ResponseData.success({ user: userDTO, access_token: accessToken, refresh_token: newRefreshToken.token });
+    return ResponseData.success({ user: UserDefaultDTO(user), access_token: accessToken, refresh_token: newRefreshToken.token });
   }
 
   async logOut(refreshToken$: string) {
-    const responseData = ResponseData.success(StatusCodes.OK, 'Clear cookie!');
+    const responseData = ResponseData.success(true, 'Clear cookie!');
 
     const { success, data: refreshToken } = RefreshTokenSchema.safeParse(refreshToken$);
     if (!success || !refreshToken) {

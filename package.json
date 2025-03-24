@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/index.ts | pino-pretty",
     "build": "tsup",
-    "es-build": "node build.js",
+    "esbuild": "node build.js",
     "start": "node dist/index.js",
     "test": "tsx watch --clear-screen=false src/test.ts | pino-pretty"
   },
