@@ -14,5 +14,5 @@ const refreshAccessTokenLimiter = rateLimit({
 
 authRouter.post('/signup', authController.signup.bind(authController));
 authRouter.post('/login', authController.login.bind(authController));
-authRouter.post('/verify', authMiddleware.accessTokenRequired.bind(authMiddleware), authController.verifyUser.bind(authController));
+authRouter.post('/verify', authMiddleware.checkAccessTokenValid.bind(authMiddleware), authController.verifyUser.bind(authController));
 authRouter.post('/access-token', refreshAccessTokenLimiter, authController.refreshAccessToken.bind(authController));

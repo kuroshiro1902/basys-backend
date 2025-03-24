@@ -1,8 +1,4 @@
 import { DB } from '@/database/database';
-import { Feature, Prisma, PrismaClient, RefreshToken, User } from '@prisma/client';
-import { TFeaturePermission } from '../feature-permission/feature-permission.model';
-import { REFRESH_TOKEN_EXPIRED_TIMESTAMP } from '../auth/auth.const';
-import { CONFIG } from '@/config/config';
 
 export class UserRepository {
   findMany = DB.user.findMany.bind(DB.user);

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { FeaturePermissionSchema } from '../feature-permission/feature-permission.model';
-import { email } from 'envalid';
+import { PermissionSchema } from '../permission/permission.model';
+import { Prisma } from '@prisma/client';
 
 export const UserSchema = z.object({
   id: z.number().int().positive(),
@@ -9,10 +9,17 @@ export const UserSchema = z.object({
   password: z.string().trim().min(6).max(255),
   avatarImg: z.string().max(500).nullable().default(null),
   bgImg: z.string().max(500).nullable().default(null),
-  features: z.array(FeaturePermissionSchema).nullable().default([]),
+  permissions: z.array(PermissionSchema).nullable().default([]),
 });
 
-export const UserInputSchema = UserSchema.pick({ name: true, email: true, password: true, features: true, avatarImg: true, bgImg: true });
+export const UserInputSchema = UserSchema.pick({
+  name: true,
+  email: true,
+  password: true,
+  permissions: true,
+  avatarImg: true,
+  bgImg: true,
+});
 
 export const UserDefaultSelect = {
   id: true,
@@ -29,3 +36,4 @@ export const UserDefaultDTO = (user: Pick<TUser, 'id' | 'name' | 'email' | 'bgIm
 
 export type TUser = z.infer<typeof UserSchema>;
 export type TUserInput = z.input<typeof UserInputSchema>;
+export type TUserSelect = Prisma.UserSelect;

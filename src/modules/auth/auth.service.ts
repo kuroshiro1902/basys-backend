@@ -7,10 +7,7 @@ import { UserRepository } from '../user/user.repository';
 import bcrypt from 'bcrypt';
 import { TUser, UserDefaultDTO, UserDefaultSelect, UserInputSchema, UserSchema } from '../user/user.model';
 import { RefreshTokenSchema, TRefreshTokenInput, TUserJWTPayload } from './auth.model';
-import { ACCESS_TOKEN_EXPIRED_TIMESTAMP, REFRESH_TOKEN_EXPIRED_TIMESTAMP } from './auth.const';
 import { logger } from '../logger';
-import { FeaturePermissionSchema } from '../feature-permission/feature-permission.model';
-import { EFeature } from '../feature-permission/feature-permission.const';
 import { CONFIG } from '@/config/config';
 
 export class AuthService {
@@ -27,25 +24,17 @@ export class AuthService {
   }
 
   private createAccessToken(payload: TUserJWTPayload): string {
-    return jwt.sign(
-      { [UserSchema.keyof().enum.id]: payload.id, [UserSchema.keyof().enum.features]: payload.features ?? [] },
-      ENV.ACCESS_TOKEN_SECRET,
-      {
-        algorithm: 'HS256',
-        expiresIn: `${CONFIG.access_token.expired_minutes}m`,
-      },
-    );
+    return jwt.sign({ [UserSchema.keyof().enum.id]: payload.id }, ENV.ACCESS_TOKEN_SECRET, {
+      algorithm: 'HS256',
+      expiresIn: `${CONFIG.access_token.expired_minutes}m`,
+    });
   }
 
   private createRefreshToken(payload: TUserJWTPayload): string {
-    return jwt.sign(
-      { [UserSchema.keyof().enum.id]: payload.id, [UserSchema.keyof().enum.features]: payload.features ?? [] },
-      ENV.REFRESH_TOKEN_SECRET,
-      {
-        algorithm: 'HS256',
-        expiresIn: `${CONFIG.refresh_token.expired_days}d`,
-      },
-    );
+    return jwt.sign({ [UserSchema.keyof().enum.id]: payload.id }, ENV.REFRESH_TOKEN_SECRET, {
+      algorithm: 'HS256',
+      expiresIn: `${CONFIG.refresh_token.expired_days}d`,
+    });
   }
 
   verifyAccessToken(token?: string) {
@@ -74,13 +63,14 @@ export class AuthService {
 
     const user = await this.userRepository.findOne({
       where: { refresh_tokens: { some: { token: refreshToken } } },
-      select: { ...UserDefaultSelect, features: { select: { feature_id: true } } },
+      select: { ...UserDefaultSelect },
     });
     if (!user) {
       return ResponseData.fail('Token is not valid!', StatusCodes.FORBIDDEN);
     }
 
-    const userJWTPayload: TUserJWTPayload = { id: user.id, features: user.features.map(({ feature_id: id }) => ({ id })) };
+    const userJWTPayload: TUserJWTPayload = { id: user.id };
+    console.log({ userJWTPayload });
 
     try {
       const decoded = jwt.verify(refreshToken, ENV.REFRESH_TOKEN_SECRET) as TUserJWTPayload;
@@ -165,7 +155,7 @@ export class AuthService {
 
     const user = await this.userRepository.findOne({
       where: { email },
-      include: { features: { select: { feature_id: true } }, refresh_tokens: { select: { token: true } } },
+      include: { refresh_tokens: { select: { token: true } } },
     });
     if (!user) {
       return ResponseData.fail('User not found!', StatusCodes.NOT_FOUND);
@@ -196,12 +186,10 @@ export class AuthService {
       return ResponseData.fail('You have reached the maximum device. Please log out from another device!', StatusCodes.TOO_MANY_REQUESTS);
       // Không hợp lý, hacker có thể đã đăng nhập vào nhiều thiết bị và đẩy người dùng thật ra.
     }
-    // eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NiwiZmVhdHVyZXMiOltdLCJpYXQiOjE3NDI0ODEyMTgsImV4cCI6MTc0Mjc0MDQxOH0.YKjX2-nMOQYiqUs4shVcQiWkddB9Z8WTDhwANgA51Mk
 
-    const features = user.features.map(({ feature_id: id }) => ({ id }));
-    const accessToken = this.createAccessToken({ id: user.id, features });
+    const accessToken = this.createAccessToken({ id: user.id });
     const newRefreshToken: TRefreshTokenInput = {
-      token: this.createRefreshToken({ id: user.id, features }),
+      token: this.createRefreshToken({ id: user.id }),
     };
 
     await this.userRepository.$transaction(async (tx) => {

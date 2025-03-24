@@ -8,7 +8,7 @@ import { TAuthRequest } from './auth.model';
 
 export class AuthMiddleware {
   constructor(private authService: AuthService = new AuthService()) {}
-  async accessTokenRequired(req: TAuthRequest, res: Response, next: NextFunction) {
+  async checkAccessTokenValid(req: TAuthRequest, res: Response, next: NextFunction) {
     const token = req.headers.authorization?.split(' ')[1]?.trim();
     try {
       const response = this.authService.verifyAccessToken(token);
