@@ -1,18 +1,18 @@
 import { CookieOptions, Request, Response } from 'express';
-import { authService, AuthService } from './auth.service';
+import { AuthService } from './auth.service';
 import { handleError } from '@/utils/handle-error.util';
 import { handleResponse } from '@/utils/handle-response.util';
 import { logger } from '../logger';
 import { CONFIG } from '@/config/config';
 import { ResponseData } from '../shared/models/response-data.model';
 import { StatusCodes } from 'http-status-codes';
-import { userService, UserService } from '../user/user.service';
+import { UserService } from '../user/user.service';
 import { TAuthRequest } from './auth.model';
 
 export class AuthController {
   private _cookieOptions: CookieOptions = { httpOnly: true, secure: true, sameSite: 'none' };
   private _cookieMaxAge = CONFIG.refresh_token.expired_days * 24 * 60 * 60 * 1000;
-  constructor(private authService: AuthService, private userService: UserService) {}
+  constructor(private authService = new AuthService(), private userService = new UserService()) {}
 
   private _getRefreshTokenFromCookie = (req: Request) => req.cookies?.[CONFIG.refresh_token.cookie_key] as string | undefined;
   private _clearRefreshTokenFromCookie = (res: Response) => res.clearCookie(CONFIG.refresh_token.cookie_key, this._cookieOptions);
@@ -134,4 +134,4 @@ export class AuthController {
   }
 }
 
-export const authController = new AuthController(authService, userService);
+export const authController = new AuthController();

@@ -10,5 +10,3 @@ export class UserService {
     return ResponseData.success(user);
   }
 }
-
-export const userService = new UserService();

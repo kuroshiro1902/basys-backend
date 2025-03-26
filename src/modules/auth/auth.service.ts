@@ -3,25 +3,22 @@ import jwt from 'jsonwebtoken';
 import { ResponseData } from '@/modules/shared/models/response-data.model';
 import { z } from 'zod';
 import { ENV } from '@/environments/environment';
-import { UserRepository } from '../user/user.repository';
 import bcrypt from 'bcrypt';
 import { TUser, UserDefaultDTO, UserDefaultSelect, UserInputSchema, UserSchema } from '../user/user.model';
 import { RefreshTokenSchema, TRefreshTokenInput, TUserJWTPayload } from './auth.model';
 import { logger } from '../logger';
 import { CONFIG } from '@/config/config';
+import { UserRepository } from '../user/user.repository';
+import { PermissionRepository } from '../permission/permission.repository';
 
 export class AuthService {
   private renewAccessTokenDirection = 'VALID_ACCESS_TOKEN_REQUIRED';
-
-  private userRepository: UserRepository;
 
   private _logInBodySchema = UserInputSchema.pick({ email: true, password: true }).extend({ refresh_token: RefreshTokenSchema.optional() });
 
   private _signUpBodySchema = UserInputSchema.pick({ email: true, password: true, name: true });
 
-  constructor(userRepository: UserRepository = new UserRepository()) {
-    this.userRepository = userRepository;
-  }
+  constructor(private userRepository = new UserRepository(), private permissionRepository = new PermissionRepository()) {}
 
   private createAccessToken(payload: TUserJWTPayload): string {
     return jwt.sign({ [UserSchema.keyof().enum.id]: payload.id }, ENV.ACCESS_TOKEN_SECRET, {
@@ -63,13 +60,14 @@ export class AuthService {
 
     const user = await this.userRepository.findOne({
       where: { refresh_tokens: { some: { token: refreshToken } } },
-      select: { ...UserDefaultSelect },
+      select: { ...UserDefaultSelect, permissions: { select: { permission_id: true } } },
     });
     if (!user) {
       return ResponseData.fail('Token is not valid!', StatusCodes.FORBIDDEN);
     }
 
-    const userJWTPayload: TUserJWTPayload = { id: user.id };
+    // User JWT Payload - Access Token
+    const userJWTPayload: TUserJWTPayload = { id: user.id, permissions: user.permissions.map((p) => p.permission_id) };
     console.log({ userJWTPayload });
 
     try {
@@ -87,75 +85,12 @@ export class AuthService {
     }
   }
 
-  // async refreshRefreshToken(
-  //   refreshToken$: string,
-  // ): Promise<ResponseData<{ user: Pick<TUser, 'id' | 'name' | 'email'>; access_token: string; refresh_token: string } | null>> {
-  //   const refreshToken = RefreshTokenSchema.optional().parse(refreshToken$);
-  //   if (!refreshToken) {
-  //     return ResponseData.fail('Invalid refresh token!', StatusCodes.UNAUTHORIZED);
-  //   }
-
-  //   const user = await this.userRepository.findOne({
-  //     where: { refresh_tokens: { some: { token: refreshToken } } },
-  //     select: {
-  //       id: true,
-  //       name: true,
-  //       email: true,
-  //       // refresh_tokens: { select: { token: true, created_at: true } },
-  //       features: { select: { feature_id: true } },
-  //     },
-  //   });
-  //   if (!user) {
-  //     return ResponseData.fail('Invalid refresh token!', StatusCodes.FORBIDDEN);
-  //   }
-
-  //   try {
-  //     const decoded = jwt.verify(refreshToken, ENV.REFRESH_TOKEN_SECRET) as TUserJWTPayload;
-
-  //     if (user.id !== decoded.id) {
-  //       await this.userRepository.update({ where: { id: user.id }, data: { refresh_tokens: { delete: { token: refreshToken } } } });
-  //       return ResponseData.fail('Invalid refresh token!', StatusCodes.FORBIDDEN);
-  //     }
-
-  //     const userJWTPayload: TUserJWTPayload = { id: user.id, features: user.features.map(({ feature_id: id }) => ({ id })) };
-  //     // Tạo Access Token và Refresh Token mới
-  //     const newAccessToken = this.createAccessToken(userJWTPayload);
-
-  //     const expiresAt = REFRESH_TOKEN_EXPIRED_TIMESTAMP();
-  //     const newRefreshToken: TRefreshTokenInput = { token: this.createRefreshToken(userJWTPayload) };
-
-  //     // Cập nhật danh sách refresh token trong database
-  //     await this.userRepository.$transaction(async (tx) => {
-  //       await tx.user.update({
-  //         where: { id: user.id },
-  //         data: { refresh_tokens: { deleteMany: { token: refreshToken } } },
-  //       });
-  //       await tx.user.update({
-  //         where: { id: user.id },
-  //         data: { refresh_tokens: { create: newRefreshToken } },
-  //       });
-  //     });
-
-  //     const { features, ...userDTO } = user;
-  //     return ResponseData.success({
-  //       user: userDTO,
-  //       access_token: newAccessToken,
-  //       refresh_token: newRefreshToken.token,
-  //       expired_at: expiresAt,
-  //     });
-  //   } catch (error: any) {
-  //     // Nếu refresh token hết hạn hoặc không hợp lệ, xóa nó khỏi DB.
-  //     await this.userRepository.update({ where: { id: user.id }, data: { refresh_tokens: { delete: { token: refreshToken } } } });
-  //     return ResponseData.fail('Verify refresh token fail! ' + error.message || '', StatusCodes.FORBIDDEN);
-  //   }
-  // }
-
   async logIn(user$: z.input<typeof this._logInBodySchema>): Promise<ResponseData<{ access_token: string; refresh_token: string } | null>> {
     const { email, password, refresh_token } = this._logInBodySchema.parse(user$);
 
     const user = await this.userRepository.findOne({
       where: { email },
-      include: { refresh_tokens: { select: { token: true } } },
+      include: { refresh_tokens: { select: { token: true } }, permissions: { select: { permission_id: true } } },
     });
     if (!user) {
       return ResponseData.fail('User not found!', StatusCodes.NOT_FOUND);
@@ -187,9 +122,11 @@ export class AuthService {
       // Không hợp lý, hacker có thể đã đăng nhập vào nhiều thiết bị và đẩy người dùng thật ra.
     }
 
-    const accessToken = this.createAccessToken({ id: user.id });
+    // User JWT Payload - Access Token
+    const userJWTPayload: TUserJWTPayload = { id: user.id, permissions: user.permissions.map((p) => p.permission_id) };
+    const accessToken = this.createAccessToken(userJWTPayload);
     const newRefreshToken: TRefreshTokenInput = {
-      token: this.createRefreshToken({ id: user.id }),
+      token: this.createRefreshToken({ id: user.id }), // Không có permissions
     };
 
     await this.userRepository.$transaction(async (tx) => {
@@ -242,5 +179,3 @@ export class AuthService {
     return ResponseData.success(createdUser, 'Create user successfully!', StatusCodes.CREATED);
   }
 }
-
-export const authService = new AuthService();
