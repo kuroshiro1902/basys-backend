@@ -4,7 +4,7 @@ import { DB } from './database/database';
 
 const server = app.listen(ENV.SERVER_PORT, async () => {
   await DB.$connect();
-  const { NODE_ENV, SERVER_HOST: HOST, SERVER_PORT: PORT } = ENV;
+  const { NODE_ENV, SERVER_PORT: PORT } = ENV;
   logger.info(`Running mode: (${NODE_ENV}) on port ${PORT}`);
 });
 
@@ -14,7 +14,7 @@ const onCloseSignal = () => {
     logger.info('server closed');
     process.exit();
   });
-  setTimeout(() => process.exit(1), 10000).unref(); // Force shutdown after 10s
+  setTimeout(() => process.exit(1), 5000).unref(); // Force shutdown after 5s
 };
 
 process.on('SIGINT', onCloseSignal);

@@ -1,23 +1,49 @@
-import { Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
-export class ResponseData<Data = any> {
-  readonly success: boolean;
-  readonly message: string | undefined;
-  readonly data: Data | null;
-  readonly statusCode: StatusCodes;
 
-  private constructor(success: boolean, statusCode: StatusCodes, data?: Data, message?: string) {
-    this.success = success;
-    this.message = message;
-    this.data = data ?? null;
-    this.statusCode = statusCode;
-  }
+type TSuccessDataInput<Data = unknown> = {
+  data: Data;
+  message?: string;
+  statusCode?: number;
+};
 
-  static success<Data = any>(data: Data, message?: string, statusCode?: StatusCodes) {
-    return new ResponseData(true, statusCode ?? StatusCodes.OK, data, message);
-  }
+type TFailDataInput<Data = unknown> = {
+  message: string;
+  statusCode?: number;
+  data?: Data;
+};
 
-  static fail<Data = any>(message: string, statusCode?: StatusCodes, data?: Data) {
-    return new ResponseData(false, statusCode ?? StatusCodes.INTERNAL_SERVER_ERROR, data ?? null, message);
-  }
-}
+export type TSuccessData<Data> = {
+  success: true;
+  data: Data;
+  message?: string;
+  statusCode?: number;
+};
+
+export type TFailData<Data> = {
+  success: false;
+  message: string;
+  statusCode?: number;
+  data?: Data;
+};
+
+export type TResponseData<Data = unknown, FailData = unknown> =
+  | TSuccessData<Data>
+  | TFailData<FailData>;
+
+export const ResponseData = {
+  success<Data>({
+    data,
+    message,
+    statusCode = StatusCodes.OK,
+  }: TSuccessDataInput<Data>): TSuccessData<Data> {
+    return { success: true, message, data, statusCode };
+  },
+
+  fail<Data>({
+    message,
+    statusCode = StatusCodes.INTERNAL_SERVER_ERROR,
+    data,
+  }: TFailDataInput<Data>): TFailData<Data> {
+    return { success: false, message, data, statusCode };
+  },
+};

@@ -7,6 +7,6 @@ export class UserService {
 
   async getUserById(id: number, select: TUserSelect = UserDefaultSelect) {
     const user = await this.userRepository.findOne({ where: { id }, select });
-    return ResponseData.success(user);
+    return ResponseData.success({ data: user });
   }
 }

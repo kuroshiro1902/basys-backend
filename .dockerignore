@@ -1,0 +1,27 @@
+# Node.js & build artifacts
+node_modules
+build
+dist
+.next
+/logs/*
+*.log
+
+# Editor and system files
+.vscode
+*.DS_Store
+
+# Git & CI/CD
+.git
+.gitignore
+.gitlab
+.github
+
+# Docs
+README.md
+LICENSE
+
+# Env
+.env
+
+# Docker internal (optional)
+.docker

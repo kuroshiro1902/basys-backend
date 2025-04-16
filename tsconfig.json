@@ -7,16 +7,15 @@
       "@/*": ["src/*"]
     },
     "moduleResolution": "Node",
-    "outDir": "dist",
+    "outDir": "build",
     "importsNotUsedAsValues": "remove",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["vitest/globals"],
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "prisma/**/*.ts"],
   "exclude": ["node_modules"]
 }

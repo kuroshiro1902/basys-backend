@@ -1,4 +1,4 @@
 export enum EPermission {
-  admin = 'super_admin',
+  admin = 'admin',
   user = 'user',
 }

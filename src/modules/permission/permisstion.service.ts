@@ -9,6 +9,6 @@ export class PermissionService {
     const s = await this.permissionRepository.findMany({
       where: { users: { every: { user_id: validUserId } }, active: true },
     });
-    return ResponseData.success(s);
+    return ResponseData.success({ data: s });
   }
 }
