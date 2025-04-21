@@ -1,42 +1,46 @@
 import { CookieOptions, Request, Response } from 'express';
 import { AuthService } from './auth.service';
-import { handleError } from '@/utils/handle-error.util';
-import { handleResponse } from '@/utils/handle-response.util';
 import { logger } from '../logger';
 import { CONFIG } from '@/config/config';
 import { ResponseData } from '../shared/models/response-data.model';
 import { StatusCodes } from 'http-status-codes';
 import { UserService } from '../user/user.service';
-import { TAuthRequest } from './auth.model';
+import { TAuthRequest, TRefreshToken, ZRefreshToken } from './auth.model';
+import { BaseController } from '@/base/controller';
+import { UserDefaultSelect, ZUserCreateInput } from '../user/user.model';
 
-export class AuthController {
+export class AuthController extends BaseController {
   private _cookieOptions: CookieOptions = {
     httpOnly: true,
     secure: true,
     sameSite: 'none',
   };
-  private _cookieMaxAge = CONFIG.refresh_token.expired_days * 24 * 60 * 60 * 1000;
+  private _cookieMaxAgeMs = CONFIG.refresh_token.expired_days * 24 * 60 * 60 * 1000;
   constructor(
     private authService = new AuthService(),
     private userService = new UserService(),
-  ) {}
+  ) {
+    super();
+  }
 
-  private _getRefreshTokenFromCookie = (req: Request) =>
-    req.cookies?.[CONFIG.refresh_token.cookie_key] as string | undefined;
-  private _clearRefreshTokenFromCookie = (res: Response) =>
+  private getRefreshTokenFromCookie = (req: Request) =>
+    req.cookies?.[CONFIG.refresh_token.cookie_key] as TRefreshToken | undefined;
+  private clearRefreshTokenFromCookie = (res: Response) =>
     res.clearCookie(CONFIG.refresh_token.cookie_key, this._cookieOptions);
-  private _setRefreshTokenToCookie = (res: Response, refreshToken: string) => {
+  private setRefreshTokenToCookie = (res: Response, refreshToken: TRefreshToken) => {
     res.cookie(CONFIG.refresh_token.cookie_key, refreshToken, {
       ...this._cookieOptions,
-      maxAge: this._cookieMaxAge,
+      maxAge: this._cookieMaxAgeMs,
     });
   };
 
   async refreshAccessToken(req: Request, res: Response) {
-    const refreshToken = this._getRefreshTokenFromCookie(req);
+    const { data: refreshToken } = ZRefreshToken.safeParse(
+      this.getRefreshTokenFromCookie(req),
+    );
 
     if (!refreshToken) {
-      return handleResponse(
+      return this.handleResponse(
         ResponseData.fail({
           message: 'Refresh token is required!',
           statusCode: StatusCodes.UNAUTHORIZED,
@@ -49,12 +53,12 @@ export class AuthController {
     const responseData = await this.authService.refreshAccessToken(refreshToken);
     if (responseData.success) {
       console.log('REFRESH ACCESS TOKEN!');
-      return handleResponse(responseData, res);
+      return this.handleResponse(responseData, res);
     }
 
     // Nếu Refresh Token không hợp lệ -> Xóa cookie & trả lỗi
-    this._clearRefreshTokenFromCookie(res);
-    return handleResponse(
+    this.clearRefreshTokenFromCookie(res);
+    return this.handleResponse(
       ResponseData.fail({
         message: responseData.message ?? 'Invalid refresh token!',
         statusCode: StatusCodes.FORBIDDEN,
@@ -63,38 +67,15 @@ export class AuthController {
     );
   }
 
-  // async refreshRefreshToken(req: Request, res: Response) {
-  //   try {
-  //     const refreshToken = this._getRefreshTokenFromCookie(req);
-  //     console.log('req.cookies', req.cookies);
-
-  //     if (!refreshToken) {
-  //       return handleResponse(ResponseData.fail('Refresh token is required!', StatusCodes.UNAUTHORIZED), res);
-  //     }
-
-  //     const responseData = await this.authService.refreshRefreshToken(refreshToken);
-  //     if (responseData.success && responseData.data) {
-  //       const { access_token, refresh_token, user } = responseData.data;
-  //       this._clearRefreshTokenFromCookie(res);
-  //       this._setRefreshTokenToCookie(res, refresh_token);
-  //       handleResponse({ ...responseData, data: { access_token, user } }, res);
-  //     } else {
-  //       handleError(responseData.message ?? 'Error refresh token!', res);
-  //     }
-  //   } catch (error: any) {
-  //     handleError(error, res);
-  //   }
-  // }
-
   async signup(req: Request, res: Response) {
-    const { body } = req;
-    return await this.authService.signUp(body);
+    const credentials = ZUserCreateInput.parse(req.body);
+    return await this.authService.signUp(credentials);
   }
   async login(req: Request, res: Response) {
     try {
       logger.info(req.body);
       const { email, password } = req.body;
-      const refreshFromCookie = this._getRefreshTokenFromCookie(req);
+      const refreshFromCookie = this.getRefreshTokenFromCookie(req);
       const resData = await this.authService.logIn({
         email,
         password,
@@ -102,31 +83,31 @@ export class AuthController {
       });
       if (resData.success) {
         if (refreshFromCookie) {
-          this._clearRefreshTokenFromCookie(res);
+          this.clearRefreshTokenFromCookie(res);
         }
         if (resData.data?.refresh_token) {
-          this._setRefreshTokenToCookie(res, resData.data.refresh_token);
+          this.setRefreshTokenToCookie(res, resData.data.refresh_token);
         }
         const { refresh_token, ...data } = resData.data ?? {};
-        handleResponse({ ...resData, data }, res);
+        this.handleResponse({ ...resData, data }, res);
         return;
       }
-      handleResponse({ ...resData }, res);
+      this.handleResponse({ ...resData }, res);
     } catch (error: any) {
-      handleError(error, res);
+      this.handleError(error, res);
     }
   }
 
   async logOut(req: Request, res: Response) {
     try {
-      const refreshToken = this._getRefreshTokenFromCookie(req);
+      const refreshToken = this.getRefreshTokenFromCookie(req);
       if (refreshToken) {
-        this._clearRefreshTokenFromCookie(res);
+        this.clearRefreshTokenFromCookie(res);
       }
       const responseData = await this.authService.logOut(refreshToken!);
-      handleResponse(responseData, res);
+      this.handleResponse(responseData, res);
     } catch (error: any) {
-      handleError(error, res);
+      this.handleError(error, res);
     }
   }
 
@@ -135,7 +116,7 @@ export class AuthController {
       const { id } = req.user ?? {};
 
       if (!id) {
-        return handleResponse(
+        return this.handleResponse(
           ResponseData.fail({
             message: 'User id is not found!',
             statusCode: StatusCodes.NOT_FOUND,
@@ -144,12 +125,18 @@ export class AuthController {
         );
       }
 
-      const response = await this.userService.getUserById(id);
-      if (response.data && response.success) {
-        return handleResponse(response, res);
+      const user = await this.userService.base.findUnique({
+        where: { id },
+        select: UserDefaultSelect,
+      });
+      if (user) {
+        return this.handleResponse(
+          ResponseData.success({ data: user, message: 'User found!' }),
+          res,
+        );
       }
 
-      return handleResponse(
+      return this.handleResponse(
         ResponseData.fail({
           message: 'User is not found!',
           statusCode: StatusCodes.NOT_FOUND,
@@ -157,7 +144,7 @@ export class AuthController {
         res,
       );
     } catch (error: any) {
-      handleError(error, res);
+      this.handleError(error, res);
     }
   }
 }

@@ -19,7 +19,7 @@ FROM base AS prod
 RUN npm install --omit=dev
 
 # Cài build tool
-RUN npm install tsup
+RUN npm install tsup typescript
 
 # Copy toàn bộ mã nguồn (sau khi cài để tránh cache lại khi source code thay đổi)
 COPY . .

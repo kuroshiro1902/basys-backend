@@ -1,14 +1,15 @@
-import { handleResponse } from '@/utils/handle-response.util';
 import { NextFunction, Request, Response } from 'express';
 import { ResponseData } from '../shared/models/response-data.model';
 import { StatusCodes } from 'http-status-codes';
 import { AuthService } from './auth.service';
-import { handleError } from '@/utils/handle-error.util';
 import { TAuthRequest } from './auth.model';
 import { EPermission } from '../permission/permission.const';
+import { BaseMiddleware } from '@/base/middlewares';
 
-export class AuthMiddleware {
-  constructor(private authService: AuthService = new AuthService()) {}
+export class AuthMiddleware extends BaseMiddleware {
+  constructor(private authService: AuthService = new AuthService()) {
+    super();
+  }
   decodeAccessToken() {
     return (req: TAuthRequest, res: Response, next: NextFunction) => {
       try {
@@ -18,10 +19,10 @@ export class AuthMiddleware {
           req.user = response.data;
           next();
         } else {
-          handleResponse(response, res);
+          this.handleResponse(response, res);
         }
       } catch (error: any) {
-        handleError(error, res);
+        this.handleError(error, res);
       }
     };
   }
@@ -34,7 +35,7 @@ export class AuthMiddleware {
   }) {
     return (req: TAuthRequest, res: Response, next: NextFunction) => {
       if (!req.user) {
-        return handleResponse(
+        return this.handleResponse(
           ResponseData.fail({
             message: 'Unauthorized',
             statusCode: StatusCodes.UNAUTHORIZED,
@@ -47,7 +48,7 @@ export class AuthMiddleware {
 
       // Kiểm tra "some" (cần ít nhất 1 quyền thỏa mãn)
       if (options.some && !options.some.some((p) => userPermissions.includes(p))) {
-        return handleResponse(
+        return this.handleResponse(
           ResponseData.fail({
             message: 'Unauthorized',
             statusCode: StatusCodes.UNAUTHORIZED,
@@ -58,7 +59,7 @@ export class AuthMiddleware {
 
       // Kiểm tra "every" (cần tất cả quyền thỏa mãn)
       if (options.every && !options.every.every((p) => userPermissions.includes(p))) {
-        return handleResponse(
+        return this.handleResponse(
           ResponseData.fail({
             message: 'Unauthorized',
             statusCode: StatusCodes.UNAUTHORIZED,
@@ -69,7 +70,7 @@ export class AuthMiddleware {
 
       // Kiểm tra "someNot" (không được có 1 trong các quyền này)
       if (options.someNot && options.someNot.some((p) => userPermissions.includes(p))) {
-        return handleResponse(
+        return this.handleResponse(
           ResponseData.fail({
             message: 'Unauthorized',
             statusCode: StatusCodes.UNAUTHORIZED,
@@ -80,7 +81,7 @@ export class AuthMiddleware {
 
       // Kiểm tra "everyNot" (không được có tất cả các quyền này)
       if (options.everyNot && options.everyNot.some((p) => userPermissions.includes(p))) {
-        return handleResponse(
+        return this.handleResponse(
           ResponseData.fail({
             message: 'Unauthorized',
             statusCode: StatusCodes.UNAUTHORIZED,
@@ -93,15 +94,3 @@ export class AuthMiddleware {
     };
   }
 }
-
-// async getUserPermissions(user_id: number, permission_ids?: string[]) {
-//   if(!permission_ids) {
-//     const user = await this.userRepository.findOne({ where: { id: user_id } });
-//   }
-//   else {
-
-//   }
-//   const user = await this.userRepository.findOne({
-//     where: { id: user_id, permissions: { every: { permission_id: { in: permission_ids } } } },
-//   });
-// }

@@ -8,58 +8,44 @@ import {
   TUser,
   UserDefaultDTO,
   UserDefaultSelect,
-  UserInputSchema,
-  UserSchema,
+  TUserCreateInput,
 } from '../user/user.model';
-import { RefreshTokenSchema, TRefreshTokenInput, TUserJWTPayload } from './auth.model';
+import {
+  ZRefreshToken,
+  TRefreshToken,
+  TUserJWTPayload,
+  TAccessToken,
+} from './auth.model';
 import { logger } from '../logger';
 import { CONFIG } from '@/config/config';
-import { UserRepository } from '../user/user.repository';
-import { PermissionRepository } from '../permission/permission.repository';
-import { User } from '@prisma/client';
+import { PermissionService } from '../permission/permisstion.service';
+import { UserService } from '../user/user.service';
+import { DB } from '@/database/database';
 
 export class AuthService {
   private renewAccessTokenDirection = 'VALID_ACCESS_TOKEN_REQUIRED';
 
-  // TODO: move schema to controller, no need to validate in service
-  private _logInBodySchema = UserInputSchema.pick({ email: true, password: true }).extend(
-    { refresh_token: RefreshTokenSchema.optional() },
-  );
-
-  private _signUpBodySchema = UserInputSchema.pick({
-    email: true,
-    password: true,
-    name: true,
-  });
-
   constructor(
-    private userRepository = new UserRepository(),
-    private permissionRepository = new PermissionRepository(),
+    private userService = new UserService(),
+    private permissionService = new PermissionService(),
   ) {}
 
-  private createAccessToken(payload: TUserJWTPayload): string {
-    return jwt.sign(
-      { [UserSchema.keyof().enum.id]: payload.id },
-      ENV.ACCESS_TOKEN_SECRET,
-      {
-        algorithm: 'HS256',
-        expiresIn: `${CONFIG.access_token.expired_minutes}m`,
-      },
-    );
+  private createAccessToken(payload: TUserJWTPayload): TAccessToken {
+    return jwt.sign(payload, ENV.ACCESS_TOKEN_SECRET, {
+      algorithm: 'HS256',
+      expiresIn: `${CONFIG.access_token.expired_minutes}m`,
+    });
   }
 
-  private createRefreshToken(payload: TUserJWTPayload): string {
-    return jwt.sign(
-      { [UserSchema.keyof().enum.id]: payload.id },
-      ENV.REFRESH_TOKEN_SECRET,
-      {
-        algorithm: 'HS256',
-        expiresIn: `${CONFIG.refresh_token.expired_days}d`,
-      },
-    );
+  private createRefreshToken(payload: Pick<TUserJWTPayload, 'id'>): TRefreshToken {
+    return jwt.sign(payload, ENV.REFRESH_TOKEN_SECRET, {
+      algorithm: 'HS256',
+      expiresIn: `${CONFIG.refresh_token.expired_days}d`,
+    });
   }
 
   verifyAccessToken(token?: string) {
+    // todo: Remove verify, just use decode
     if (!token) {
       return ResponseData.fail({
         message: 'Unauthorized',
@@ -91,7 +77,7 @@ export class AuthService {
       };
     }>
   > {
-    const refreshToken = RefreshTokenSchema.optional().parse(refreshToken$);
+    const refreshToken = ZRefreshToken.optional().parse(refreshToken$);
     if (!refreshToken) {
       return ResponseData.fail({
         message: 'Invalid refresh token!',
@@ -99,7 +85,7 @@ export class AuthService {
       });
     }
 
-    const user = await this.userRepository.findOne({
+    const user = await this.userService.base.findFirst({
       where: { refresh_tokens: { some: { token: refreshToken } } },
       select: { ...UserDefaultSelect, permissions: { select: { permission_id: true } } },
     });
@@ -147,11 +133,11 @@ export class AuthService {
   }
 
   async logIn(
-    user$: z.input<typeof this._logInBodySchema>,
+    credentials: Pick<TUser, 'email' | 'password' | 'refresh_token'>,
   ): Promise<TResponseData<{ access_token: string; refresh_token: string } | null>> {
-    const { email, password, refresh_token } = this._logInBodySchema.parse(user$);
+    const { email, password, refresh_token } = credentials;
 
-    const user = await this.userRepository.findOne({
+    const user = await this.userService.base.findFirst({
       where: { email },
       include: {
         refresh_tokens: { select: { token: true } },
@@ -182,7 +168,7 @@ export class AuthService {
       if (!foundToken) {
         logger.warn('Detected refresh token reuse! User is maybe being attacked!');
         // Xóa tất cả refresh token của user để bảo vệ tài khoản
-        await this.userRepository.update({
+        await this.userService.base.update({
           where: { id: user.id },
           data: { refresh_tokens: { deleteMany: {} } },
         });
@@ -209,11 +195,9 @@ export class AuthService {
       permissions: user.permissions.map((p) => p.permission_id),
     };
     const accessToken = this.createAccessToken(userJWTPayload);
-    const newRefreshToken: TRefreshTokenInput = {
-      token: this.createRefreshToken({ id: user.id }), // Không có permissions
-    };
+    const newRefreshToken: TRefreshToken = this.createRefreshToken({ id: user.id });
 
-    await this.userRepository.$transaction(async (tx) => {
+    await DB.$transaction(async (tx) => {
       if (refresh_token) {
         await tx.user.update({
           where: { id: user.id },
@@ -226,7 +210,7 @@ export class AuthService {
       await tx.user.update({
         where: { id: user.id },
         data: {
-          refresh_tokens: { create: { token: newRefreshToken.token } },
+          refresh_tokens: { create: { token: newRefreshToken } },
         },
       });
     });
@@ -235,7 +219,7 @@ export class AuthService {
       data: {
         user: UserDefaultDTO(user),
         access_token: accessToken,
-        refresh_token: newRefreshToken.token,
+        refresh_token: newRefreshToken,
       },
     });
   }
@@ -243,16 +227,16 @@ export class AuthService {
   async logOut(refreshToken$: string) {
     const responseData = ResponseData.success({ data: true, message: 'Clear cookie!' });
 
-    const { success, data: refreshToken } = RefreshTokenSchema.safeParse(refreshToken$);
+    const { success, data: refreshToken } = ZRefreshToken.safeParse(refreshToken$);
     if (!success || !refreshToken) {
       return responseData;
     }
 
-    const user = await this.userRepository.findOne({
+    const user = await this.userService.base.findFirst({
       where: { refresh_tokens: { some: { token: refreshToken } } },
     });
     if (user) {
-      await this.userRepository.update({
+      await this.userService.base.update({
         where: { id: user.id },
         data: { refresh_tokens: { delete: { token: refreshToken } } },
       });
@@ -261,24 +245,21 @@ export class AuthService {
     return responseData;
   }
 
-  async signUp(
-    user$: z.input<typeof this._signUpBodySchema>,
-  ): Promise<TResponseData<User>> {
-    const user = this._signUpBodySchema.parse(user$);
-    const userExists = await this.userRepository.findOne({
-      where: { email: user.email },
+  async signUp(credentials: TUserCreateInput): Promise<TResponseData<TUser>> {
+    const userExists = await this.userService.base.count({
+      where: { email: credentials.email },
     });
-    if (userExists) {
+    if (userExists > 0) {
       return ResponseData.fail({
         message: 'User already exists!',
         statusCode: StatusCodes.CONFLICT,
       });
     }
 
-    const hashedPassword = await bcrypt.hash(user.password, 10);
-    user.password = hashedPassword;
-    const createdUser = await this.userRepository.create({
-      data: user,
+    const hashedPassword = await bcrypt.hash(credentials.password, 10);
+    credentials.password = hashedPassword;
+    const createdUser = await this.userService.base.create({
+      data: { ...credentials, refresh_tokens: undefined, permissions: undefined },
     });
     return ResponseData.success({
       data: createdUser,
