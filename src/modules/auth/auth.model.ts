@@ -11,7 +11,10 @@ export const ZAccessToken = z.string().min(1).trim();
  *
  * Refresh token sẽ không có Permissions.
  */
-export type TUserJWTPayload = Pick<TUser, 'id'> & { permissions: string[] };
+export type TUserJWTPayload = Pick<
+  TUser,
+  'id' | 'name' | 'avatarImg' | 'bgImg' | 'email'
+> & { permissions: string[] };
 
 export type TAccessToken = z.infer<typeof ZAccessToken>;
 export type TRefreshToken = z.infer<typeof ZRefreshToken>;

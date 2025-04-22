@@ -1,7 +1,6 @@
 import { StatusCodes } from 'http-status-codes';
 import jwt from 'jsonwebtoken';
 import { ResponseData, TResponseData } from '@/modules/shared/models/response-data.model';
-import { z } from 'zod';
 import { ENV } from '@/environments/environment';
 import bcrypt from 'bcrypt';
 import {
@@ -10,12 +9,7 @@ import {
   UserDefaultSelect,
   TUserCreateInput,
 } from '../user/user.model';
-import {
-  ZRefreshToken,
-  TRefreshToken,
-  TUserJWTPayload,
-  TAccessToken,
-} from './auth.model';
+import { TRefreshToken, TUserJWTPayload, TAccessToken } from './auth.model';
 import { logger } from '../logger';
 import { CONFIG } from '@/config/config';
 import { PermissionService } from '../permission/permisstion.service';
@@ -26,8 +20,7 @@ export class AuthService {
   private renewAccessTokenDirection = 'VALID_ACCESS_TOKEN_REQUIRED';
 
   constructor(
-    private userService = new UserService(),
-    private permissionService = new PermissionService(),
+    private userService = new UserService(), // private permissionService = new PermissionService(),
   ) {}
 
   private createAccessToken(payload: TUserJWTPayload): TAccessToken {
@@ -65,7 +58,7 @@ export class AuthService {
     }
   }
 
-  async refreshAccessToken(refreshToken$: string): Promise<
+  async refreshAccessToken(refreshToken?: string): Promise<
     TResponseData<{
       access_token: string;
       user: {
@@ -77,7 +70,6 @@ export class AuthService {
       };
     }>
   > {
-    const refreshToken = ZRefreshToken.optional().parse(refreshToken$);
     if (!refreshToken) {
       return ResponseData.fail({
         message: 'Invalid refresh token!',
@@ -99,6 +91,10 @@ export class AuthService {
     // User JWT Payload - Access Token
     const userJWTPayload: TUserJWTPayload = {
       id: user.id,
+      name: user.name,
+      email: user.email,
+      avatarImg: user.avatarImg,
+      bgImg: user.bgImg,
       permissions: user.permissions.map((p) => p.permission_id),
     };
     console.log({ userJWTPayload });
@@ -192,6 +188,10 @@ export class AuthService {
     // User JWT Payload - Access Token
     const userJWTPayload: TUserJWTPayload = {
       id: user.id,
+      name: user.name,
+      email: user.email,
+      avatarImg: user.avatarImg,
+      bgImg: user.bgImg,
       permissions: user.permissions.map((p) => p.permission_id),
     };
     const accessToken = this.createAccessToken(userJWTPayload);
@@ -224,11 +224,10 @@ export class AuthService {
     });
   }
 
-  async logOut(refreshToken$: string) {
+  async logOut(refreshToken?: string) {
     const responseData = ResponseData.success({ data: true, message: 'Clear cookie!' });
 
-    const { success, data: refreshToken } = ZRefreshToken.safeParse(refreshToken$);
-    if (!success || !refreshToken) {
+    if (!refreshToken) {
       return responseData;
     }
 
@@ -266,5 +265,19 @@ export class AuthService {
       message: 'Create user successfully!',
       statusCode: StatusCodes.CREATED,
     });
+  }
+
+  async me(userId: TUser['id']) {
+    const user = await this.userService.base.findFirst({
+      where: { id: userId },
+      select: { ...UserDefaultSelect },
+    });
+    if (!user) {
+      return ResponseData.fail({
+        message: 'User not found!',
+        statusCode: StatusCodes.NOT_FOUND,
+      });
+    }
+    return ResponseData.success({ data: user });
   }
 }

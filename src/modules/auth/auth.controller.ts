@@ -111,7 +111,7 @@ export class AuthController extends BaseController {
     }
   }
 
-  async verifyUser(req: TAuthRequest, res: Response) {
+  async me(req: TAuthRequest, res: Response) {
     try {
       const { id } = req.user ?? {};
 
@@ -125,24 +125,8 @@ export class AuthController extends BaseController {
         );
       }
 
-      const user = await this.userService.base.findUnique({
-        where: { id },
-        select: UserDefaultSelect,
-      });
-      if (user) {
-        return this.handleResponse(
-          ResponseData.success({ data: user, message: 'User found!' }),
-          res,
-        );
-      }
-
-      return this.handleResponse(
-        ResponseData.fail({
-          message: 'User is not found!',
-          statusCode: StatusCodes.NOT_FOUND,
-        }),
-        res,
-      );
+      const resData = await this.authService.me(id);
+      return this.handleResponse(resData, res);
     } catch (error: any) {
       this.handleError(error, res);
     }
