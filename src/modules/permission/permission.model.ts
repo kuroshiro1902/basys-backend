@@ -1,3 +1,4 @@
+import { Permission } from '@/generated/prisma';
 import { z } from 'zod';
 
 export const ZPermission = z.object({
@@ -7,4 +8,4 @@ export const ZPermission = z.object({
   active: z.boolean().default(true),
 });
 
-// export type TPermission = z.infer<typeof ZPermissionSchema>;
+export type TPermission = Permission;

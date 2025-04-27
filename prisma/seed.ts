@@ -11,7 +11,7 @@ const PERMISSIONS = [
   { id: 'user', name: 'USER' },
 ];
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@/generated/prisma';
 import bcrypt from 'bcrypt';
 
 const DB = new PrismaClient();
@@ -34,7 +34,7 @@ const seed = async () => {
   const hashedPassword = await bcrypt.hash(ADMIN.password, 10);
   return await DB.$transaction(async (tx) => {
     const admin = await tx.user.create({
-      data: { ...ADMIN, password: hashedPassword },
+      data: { ...ADMIN, password: hashedPassword, updated_at: new Date() },
     });
     await tx.userPermission.create({
       data: {

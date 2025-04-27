@@ -1,13 +1,14 @@
 import { CookieOptions, Request, Response } from 'express';
-import { AuthService } from './auth.service';
+import { authService as authServiceInstance } from './auth.service';
 import { logger } from '../logger';
 import { CONFIG } from '@/config/config';
 import { ResponseData } from '../shared/models/response-data.model';
 import { StatusCodes } from 'http-status-codes';
-import { UserService } from '../user/user.service';
+import { userService as userServiceInstance } from '../user/user.service';
 import { TAuthRequest, TRefreshToken, ZRefreshToken } from './auth.model';
 import { BaseController } from '@/base/controller';
 import { UserDefaultSelect, ZUserCreateInput } from '../user/user.model';
+import { z } from 'zod';
 
 export class AuthController extends BaseController {
   private _cookieOptions: CookieOptions = {
@@ -17,8 +18,8 @@ export class AuthController extends BaseController {
   };
   private _cookieMaxAgeMs = CONFIG.refresh_token.expired_days * 24 * 60 * 60 * 1000;
   constructor(
-    private authService = new AuthService(),
-    private userService = new UserService(),
+    private authService = authServiceInstance,
+    private userService = userServiceInstance,
   ) {
     super();
   }
@@ -68,8 +69,20 @@ export class AuthController extends BaseController {
   }
 
   async signup(req: Request, res: Response) {
-    const credentials = ZUserCreateInput.parse(req.body);
-    return await this.authService.signUp(credentials);
+    try {
+      const { confirmPassword, ...credentials } = ZUserCreateInput.extend({
+        confirmPassword: ZUserCreateInput.shape.password,
+      })
+        .refine((data) => data.password === data.confirmPassword, {
+          message: 'Mật khẩu không khớp',
+          path: ['confirmPassword'],
+        })
+        .parse(req.body);
+      const resData = await this.authService.signUp(credentials);
+      this.handleResponse(resData, res);
+    } catch (error: any) {
+      this.handleError(error, res);
+    }
   }
   async login(req: Request, res: Response) {
     try {

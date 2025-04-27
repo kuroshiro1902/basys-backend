@@ -94,3 +94,5 @@ export class AuthMiddleware extends BaseMiddleware {
     };
   }
 }
+
+export const authMiddleware = new AuthMiddleware();

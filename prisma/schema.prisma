@@ -21,6 +21,8 @@ model User {
   password  String 
   avatarImg String?
   bgImg     String?
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @updatedAt @db.Timestamptz
 
   refresh_tokens RefreshToken[]
   permissions  UserPermission[]

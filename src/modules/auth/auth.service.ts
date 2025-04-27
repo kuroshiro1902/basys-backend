@@ -12,15 +12,14 @@ import {
 import { TRefreshToken, TUserJWTPayload, TAccessToken } from './auth.model';
 import { logger } from '../logger';
 import { CONFIG } from '@/config/config';
-import { PermissionService } from '../permission/permisstion.service';
-import { UserService } from '../user/user.service';
+import { UserService, userService as userServiceInstance } from '../user/user.service';
 import { DB } from '@/database/database';
 
 export class AuthService {
   private renewAccessTokenDirection = 'VALID_ACCESS_TOKEN_REQUIRED';
 
   constructor(
-    private userService = new UserService(), // private permissionService = new PermissionService(),
+    private userService = userServiceInstance, // private permissionService = new PermissionService(),
   ) {}
 
   private createAccessToken(payload: TUserJWTPayload): TAccessToken {
@@ -79,7 +78,13 @@ export class AuthService {
 
     const user = await this.userService.base.findFirst({
       where: { refresh_tokens: { some: { token: refreshToken } } },
-      select: { ...UserDefaultSelect, permissions: { select: { permission_id: true } } },
+      select: {
+        ...UserDefaultSelect,
+        permissions: {
+          select: { permission_id: true },
+          where: { permission: { active: true } },
+        },
+      },
     });
     if (!user) {
       return ResponseData.fail({
@@ -137,7 +142,10 @@ export class AuthService {
       where: { email },
       include: {
         refresh_tokens: { select: { token: true } },
-        permissions: { select: { permission_id: true } },
+        permissions: {
+          select: { permission_id: true },
+          where: { permission: { active: true } },
+        },
       },
     });
     if (!user) {
@@ -270,7 +278,13 @@ export class AuthService {
   async me(userId: TUser['id']) {
     const user = await this.userService.base.findFirst({
       where: { id: userId },
-      select: { ...UserDefaultSelect },
+      select: {
+        ...UserDefaultSelect,
+        permissions: {
+          select: { permission_id: true },
+          where: { permission: { active: true } },
+        },
+      },
     });
     if (!user) {
       return ResponseData.fail({
@@ -278,6 +292,10 @@ export class AuthService {
         statusCode: StatusCodes.NOT_FOUND,
       });
     }
-    return ResponseData.success({ data: user });
+    return ResponseData.success({
+      data: { ...user, permissions: user.permissions.map((p) => p.permission_id) },
+    });
   }
 }
+
+export const authService = new AuthService();

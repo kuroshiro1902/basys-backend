@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
-import { PermissionService } from './permisstion.service';
+import { permissionService as permissionServiceInstance } from './permission.service';
 import { BaseController } from '@/base/controller';
 import { ZUser } from '../user/user.model';
 
 export class PermissionController extends BaseController {
-  constructor(private permissionService = new PermissionService()) {
+  constructor(private permissionService = permissionServiceInstance) {
     super();
   }
 

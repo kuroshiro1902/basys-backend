@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { ZPermission } from '../permission/permission.model';
 import { ZRefreshToken } from '../auth/auth.model';
+import { TTimestamp } from '../shared/models/timestamp.model';
 
 export const ZUser = z.object({
   id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -19,7 +20,6 @@ export const ZUserCreateInput = ZUser.pick({
   name: true,
   email: true,
   password: true,
-  permissions: true,
   avatarImg: true,
   bgImg: true,
 });
@@ -39,6 +39,6 @@ export const UserDefaultDTO = (
   return { id, name, email, bgImg, avatarImg };
 };
 
-export type TUser = z.infer<typeof ZUser>;
+export type TUser = z.infer<typeof ZUser> & TTimestamp;
 export type TUserCreateInput = z.infer<typeof ZUserCreateInput>;
 // export type TUserSelect = Prisma.UserSelect;

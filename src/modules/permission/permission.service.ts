@@ -1,6 +1,6 @@
 import { DB } from '@/database/database';
 import { ResponseData } from '../shared/models/response-data.model';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma';
 
 export class PermissionService {
   base = DB.permission;
@@ -23,3 +23,5 @@ export class PermissionService {
     return ResponseData.success({ data });
   }
 }
+
+export const permissionService = new PermissionService();
