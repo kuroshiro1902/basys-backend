@@ -37,7 +37,6 @@ export class AuthService {
   }
 
   verifyAccessToken(token?: string) {
-    // todo: Remove verify, just use decode
     if (!token) {
       return ResponseData.fail({
         message: 'Unauthorized',

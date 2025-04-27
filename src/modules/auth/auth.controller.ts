@@ -111,7 +111,7 @@ export class AuthController extends BaseController {
     }
   }
 
-  async logOut(req: Request, res: Response) {
+  async logout(req: Request, res: Response) {
     try {
       const refreshToken = this.getRefreshTokenFromCookie(req);
       if (refreshToken) {
