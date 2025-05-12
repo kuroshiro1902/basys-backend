@@ -13,7 +13,7 @@ import { TRefreshToken, TUserJWTPayload, TAccessToken } from './auth.model';
 import { logger } from '../logger';
 import { CONFIG } from '@/config/config';
 import { UserService, userService as userServiceInstance } from '../user/user.service';
-import { DB } from '@/database/database';
+import { postgres } from '@/lib/prisma.lib';
 
 export class AuthService {
   private renewAccessTokenDirection = 'VALID_ACCESS_TOKEN_REQUIRED';
@@ -204,7 +204,7 @@ export class AuthService {
     const accessToken = this.createAccessToken(userJWTPayload);
     const newRefreshToken: TRefreshToken = this.createRefreshToken({ id: user.id });
 
-    await DB.$transaction(async (tx) => {
+    await postgres.$transaction(async (tx) => {
       if (refresh_token) {
         await tx.user.update({
           where: { id: user.id },

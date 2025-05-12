@@ -1,9 +1,11 @@
 import { app, logger } from '@/server';
 import { ENV } from './environments/environment';
-import { DB } from './database/database';
+import { postgres } from './lib/prisma.lib';
+import { redis } from './lib/redis.lib';
 
 const server = app.listen(ENV.SERVER_PORT, async () => {
-  await DB.$connect();
+  await postgres.$connect();
+  await redis.connect();
   const { NODE_ENV, SERVER_PORT: PORT } = ENV;
   logger.info(`Running mode: (${NODE_ENV}) on port ${PORT}`);
 });

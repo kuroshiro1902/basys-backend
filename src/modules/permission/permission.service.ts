@@ -1,9 +1,9 @@
-import { DB } from '@/database/database';
+import { postgres } from '@/lib/prisma.lib';
 import { ResponseData } from '@/base/service';
 import { Prisma } from '@/generated/prisma';
 
 export class PermissionService {
-  base = DB.permission;
+  base = postgres.permission;
   constructor() {}
 
   public async getActivePermissionsByUserId(

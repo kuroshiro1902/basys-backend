@@ -1,4 +1,4 @@
-import { DB } from '@/database/database';
+import { postgres } from '@/lib/prisma.lib';
 import {
   TCollection,
   TCollectionCreate,
@@ -9,7 +9,7 @@ import { ResponseData } from '@/base/service';
 import { StatusCodes } from 'http-status-codes';
 import { TPageData, TPageInput } from '../shared/models/paging.model';
 export class CollectionService {
-  base = DB.collection;
+  base = postgres.collection;
 
   constructor() {}
 

@@ -1,7 +1,7 @@
-import { DB } from '@/database/database';
+import { postgres } from '@/lib/prisma.lib';
 
 export class UserService {
-  base = DB.user;
+  base = postgres.user;
   constructor() {}
 }
 
