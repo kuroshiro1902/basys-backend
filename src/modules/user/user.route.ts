@@ -6,7 +6,7 @@ export const userRouter = Router();
 
 userRouter.get(
   '/all',
-  authMiddleware.decodeAccessToken().bind(authMiddleware),
+  authMiddleware.decodeAccessToken.bind(authMiddleware),
   // TODO: Test with normal user
   authMiddleware.checkPermission({ some: [EPermission.admin] }).bind(authMiddleware),
   userController.getAllUsers.bind(userController),

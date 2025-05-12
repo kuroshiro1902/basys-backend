@@ -17,7 +17,7 @@ authRouter.post('/login', authController.login.bind(authController));
 authRouter.post('/logout', authController.logout.bind(authController));
 authRouter.get(
   '/me',
-  authMiddleware.decodeAccessToken().bind(authMiddleware),
+  authMiddleware.decodeAccessToken.bind(authMiddleware),
   authController.me.bind(authController),
 );
 authRouter.post(

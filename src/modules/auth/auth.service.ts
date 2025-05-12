@@ -1,6 +1,6 @@
 import { StatusCodes } from 'http-status-codes';
 import jwt from 'jsonwebtoken';
-import { ResponseData, TResponseData } from '@/modules/shared/models/response-data.model';
+import { ResponseData, TResponseData } from '@/base/service';
 import { ENV } from '@/environments/environment';
 import bcrypt from 'bcrypt';
 import {

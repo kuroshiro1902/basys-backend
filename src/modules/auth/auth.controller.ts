@@ -2,7 +2,7 @@ import { CookieOptions, Request, Response } from 'express';
 import { authService as authServiceInstance } from './auth.service';
 import { logger } from '../logger';
 import { CONFIG } from '@/config/config';
-import { ResponseData } from '../shared/models/response-data.model';
+import { ResponseData } from '@/base/service';
 import { StatusCodes } from 'http-status-codes';
 import { userService as userServiceInstance } from '../user/user.service';
 import { TAuthRequest, TRefreshToken, ZRefreshToken } from './auth.model';

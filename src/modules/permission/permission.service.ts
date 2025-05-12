@@ -1,5 +1,5 @@
 import { DB } from '@/database/database';
-import { ResponseData } from '../shared/models/response-data.model';
+import { ResponseData } from '@/base/service';
 import { Prisma } from '@/generated/prisma';
 
 export class PermissionService {

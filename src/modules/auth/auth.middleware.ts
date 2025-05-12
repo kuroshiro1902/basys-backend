@@ -1,30 +1,28 @@
-import { NextFunction, Request, Response } from 'express';
-import { ResponseData } from '../shared/models/response-data.model';
+import { NextFunction, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { AuthService } from './auth.service';
 import { TAuthRequest } from './auth.model';
 import { EPermission } from '../permission/permission.const';
 import { BaseMiddleware } from '@/base/middlewares';
+import { ResponseData } from '@/base/service';
 
 export class AuthMiddleware extends BaseMiddleware {
   constructor(private authService: AuthService = new AuthService()) {
     super();
   }
-  decodeAccessToken() {
-    return (req: TAuthRequest, res: Response, next: NextFunction) => {
-      try {
-        const token = req.headers.authorization?.split(' ')[1]?.trim();
-        const response = this.authService.verifyAccessToken(token);
-        if (response.success && typeof response.data === 'object' && response.data?.id) {
-          req.user = response.data;
-          next();
-        } else {
-          this.handleResponse(response, res);
-        }
-      } catch (error: any) {
-        this.handleError(error, res);
+  decodeAccessToken(req: TAuthRequest, res: Response, next: NextFunction) {
+    try {
+      const token = req.headers.authorization?.split(' ')[1]?.trim();
+      const response = this.authService.verifyAccessToken(token);
+      if (response.success && typeof response.data === 'object' && response.data?.id) {
+        req.user = response.data;
+        next();
+      } else {
+        this.handleResponse(response, res);
       }
-    };
+    } catch (error: any) {
+      this.handleError(error, res);
+    }
   }
 
   checkPermission(options: {

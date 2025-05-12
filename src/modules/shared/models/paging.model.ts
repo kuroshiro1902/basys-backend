@@ -13,12 +13,13 @@ export type TPageInfo = {
 };
 
 export const ZPageInput = (defaultPageSize = 12, maxPageSize = 64) =>
-  z
-    .object({
-      pageIndex: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).default(1),
-      pageSize: z.number().int().positive().max(maxPageSize).default(defaultPageSize),
-    })
-    .transform((data) => ({
-      ...data,
-      skip: (data.pageIndex - 1) * data.pageSize,
-    }));
+  z.object({
+    pageIndex: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).default(1),
+    pageSize: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(maxPageSize)
+      .default(defaultPageSize),
+  });
+export type TPageInput = z.infer<ReturnType<typeof ZPageInput>>;

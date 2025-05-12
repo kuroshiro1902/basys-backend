@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authRouter } from './modules/auth/auth.route';
 import { userRouter } from './modules/user/user.route';
+import { collectionRouter } from './modules/collection/collection.route';
 const router = Router();
 
 router.get('', (req, res) => {
@@ -13,5 +14,6 @@ router.get('', (req, res) => {
 
 router.use('/auth', authRouter);
 router.use('/user', userRouter);
+router.use('/collection', collectionRouter);
 
 export default router;

@@ -1,4 +1,4 @@
-import { ResponseData, TResponseData } from '@/modules/shared/models/response-data.model';
+import { ResponseData, TResponseData } from '@/base/service';
 import { logger } from '@/server';
 import { Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
